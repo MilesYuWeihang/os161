@@ -69,6 +69,17 @@ struct proc {
 #endif
 
 	/* add more material here as needed */
+#if OPT_A2
+	pid_t pid;
+ 	struct proc *parent; // parent
+ 	struct array children; //children
+ 	struct lock *waitPidLock;
+ 	struct cv *waitPidCV;
+ 	int state;	//1 is running, 0 is exit
+ 	int exitcode;
+
+#endif
+
 };
 
 /* This is the process structure for the kernel and for kernel-only threads. */
@@ -100,5 +111,15 @@ struct addrspace *curproc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *curproc_setas(struct addrspace *);
 
+
+//a2
+struct array *runningProcs;
+
+struct array *reusePid;
+
+//pid lock when assignPid
+struct lock *pidLock;
+//allProcLock when add/delete proc of runningProc
+struct lock *allProcLock;
 
 #endif /* _PROC_H_ */

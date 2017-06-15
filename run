@@ -1,0 +1,9 @@
+#!/bin/bash
+f(){
+cd os161-1.99/kern/compile/ASST$1
+bmake install
+cd ../../../../root
+sys161 kernel
+}
+
+f $1

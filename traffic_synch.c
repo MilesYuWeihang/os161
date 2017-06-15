@@ -128,7 +128,7 @@ struct cv *chooseCV(Direction d, Direction e){
         case south: return NS;
         case west: return NW;
         case east: return NE;
-        default: return NS;
+        default: break;
       };
     
     case south:
@@ -136,21 +136,21 @@ struct cv *chooseCV(Direction d, Direction e){
         case north: return SN;
         case west: return SW;
         case east: return SE;
-        default: return NS;
+        default:  break;
       };
     case west: 
       switch(e){
         case south: return WS;
         case north: return WN;
         case east: return WE;
-        default: return NS;
+        default:  break;
       };
     case east: 
       switch(e){
         case south: return ES;
         case west: return EW;
         case north: return EN;
-        default: return NS;
+        default:  break;
       };
   }
   return NS;
@@ -222,7 +222,7 @@ intersection_sync_cleanup(void)
   cv_destroy(SE);
   cv_destroy(WN);
   cv_destroy(WE);
-  cv_destroy(ES);
+  cv_destroy(WS);
   KASSERT(trafficLock != NULL);
   lock_destroy(trafficLock);
   array_destroy(mutexList);

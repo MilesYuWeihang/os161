@@ -1,0 +1,436 @@
+
+<h1> Hints for A2a </h1>
+
+<!-- --------------------------------------------------------- -->
+<hr>
+<h1>Quick Topic Links</h1>
+
+<ul>
+<li><a href="#general">general hints</a></li>
+<li><a href="#exit">_exit</a></li>
+<li><a href="#fork">fork</a></li>
+<li><a href="#includes">kernel include files</a></li>
+<li><a href="#kmalloc">proper use of kmalloc and kfree </a></li>
+<li><a href="#testing">testing</a></li>
+</ul>
+
+
+<!-- --------------------------------------------------------- -->
+<hr>
+<h1>General</h1>
+<a name="general"></a>
+
+<li>
+Don't forget to re-configure your kernel for
+Assignment 2, and to do all of your kernel builds
+in <tt>kern/compile/ASST2</tt>
+
+<pre>
+% cd $HOME/cs350-os161/os161-1.99/kern/conf
+% ./config ASST2
+% cd ../compile/ASST2
+% bmake depend
+% bmake
+% bmake install
+</pre>
+</li>
+
+
+<br>
+<li>
+Don't forget that if you add any new source files to the
+kernel code, you need to update the file
+<tt>kern/conf/conf.kern</tt> and you need to reconfigure
+your kernel.
+If you don't do this, the code in your new source file will
+not be included in the kernel build.
+</li>
+
+<br>
+<li>
+Don't worry about trying to reclaim physical frames
+in the kernel when they are no longer used.
+However, you should make sure that you kfree
+kernel memory that you've allocated using kmalloc
+but that the kernel no longer needs.
+</li>
+
+<br>
+<li>
+You may like to have lots of debugging information 
+printing out from your kernel, but the kernel you
+submit to us must not do so.
+OS/161's DEBUG facility that can help with
+this problem - you can bury lots of debugging statements
+into your code, and you can turn them all off by just
+changing the value of a single variable.  You can even
+turn them off conditionally by labeling them properly.
+<p>
+You encountered the <tt>DEBUG</tt> mechanism in A0,
+but as a reminder:
+<ul>
+<li>To use this facility, you just include <tt>DEBUG</tt>
+statements into your code instead of <tt>kprintf</tt>,
+like this:
+<pre>
+DEBUG(DB_EXEC, "ELF: Loading %lu bytes to 0x%lx\n", 
+     (unsigned long) filesize, (unsigned long) vaddr);
+</pre>
+The <tt>DEBUG</tt> macro and the various flags
+(like <tt>DB_EXEC</tt>) are defined in 
+<tt>kern/include/lib.h</tt>.</li>
+<li> To control which <tt>DEBUG</tt> statements produce
+output, set the <tt>dbflags</tt> variable, which 
+is found in <tt>kern/lib/kprintf.c</tt>.
+For example, setting
+
+<pre>
+u_int32_t dbflags = 0;
+</pre>
+
+will turn off all debugging output, while
+
+<pre>
+u_int32_t dbflags = DB_EXEC|DB_THREADS;
+</pre>
+
+will turn off everything except <tt>DEBUG</tt>
+statements that are labeled with
+<tt>DB_EXEC</tt> or <tt>DB_THREADS</tt>.</li>
+</ul>
+</li>
+
+
+</ol>
+
+<!-- --------------------------------------------------------- -->
+<hr>
+
+<h1> _exit </h1>
+<a name="exit"></a>
+
+<ul>
+<li>
+The partial implementation of <tt>_exit</tt> in the
+base OS/161 does not do anything with the exit status
+code provided by the the user program.
+Your complete implementation of <tt>_exit</tt> should
+properly handle the exit status code as described in the
+manual pages for <tt>_exit</tt> and <tt>waitpid</tt>.
+<p>
+Here is something to think about when you do start
+worrying about those exit status codes:
+a process's exit status code may be needed long after
+that process has exited.  Where will you keep the
+code, and when will it be safe to forget it?
+</li>
+</ul>
+
+<!-- --------------------------------------------------------- -->
+
+<!--
+<hr>
+<h1>passing arguments</h1>
+<a name="args"></a>
+<ul>
+<li>To pass arguments (<tt>argv</tt>) to a user program, you will have to
+load the arguments into the program's address space.  In addition
+to the argument strings themselves, you have to create the <tt>argv</tt>
+array in the user program's address space - <tt>argv</tt> is an array
+of pointers to the actual argument strings.</li>
+<br>
+<li>
+Whenever you are loading data into an address space, you must ensure
+that it is properly <em>aligned</em>.  Otherwise, the application will cause
+addressing exceptions when it tries to access the data.
+4-byte items, like character pointers, must start at an address that
+is divisible by 4.  So, it would be OK to start your <tt>argv</tt>
+array at an address like <tt>0x7fffff08</tt>, but your application
+will run in to alignment problems if <tt>argv</tt> starts at an
+address like <tt>0x7fffff09</tt> or <tt>0x7fffff0a</tt>, since those
+addresses are not divisible by 4.
+Characters are only 1 byte long, so there are no alignment issues.
+Your argument strings, which are character arrays, can start at any
+address.
+<p>
+A related constraint is that the stack pointer should always start
+at an address that is 8-byte aligned (evenly divisible by 8).
+This is because the largest data types that require alignment
+(and which might be pushed onto a stack) are 8 bytes long, e.g.,
+a double-precision floating point value.
+</li> 
+
+<li>
+Make sure that you understand how <tt>argv</tt> and <tt>argc</tt>
+are supposed to work before you try implementing argument passing.
+As an example, consider the <tt>testbin/tail</tt> application,
+which expects two arguments.  The <tt>main()</tt> function of 
+<tt>tail</tt> looks like this:
+
+<pre>
+int
+main(int argc, char **argv)
+{
+	int file;
+
+	if (argc < 3) {
+		errx(1, "Usage: tail <file> <location>");
+	}
+	file = open(argv[1], O_RDONLY);
+	if (file < 0) {
+		err(1, "%s", argv[1]);
+	}
+	tail(file, atoi(argv[2]), argv[1]);
+	close(file);
+	return 0;
+}
+</pre>
+<tt>argv</tt> is a character pointer pointer - it points to an
+array of character pointers, each of which points to one of the
+arguments.   For example, if the <tt>tail</tt> program is
+invoked from the kernel command line like this:
+
+<pre>
+OS/161 kernel [? for menu]: p testbin/sort foo 100
+</pre> 
+
+Then the <tt>argv</tt> and <tt>argc</tt> variables should
+be set up as illustrated in the following illustration:
+<br>
+<img src="argvargc.png">
+<br>
+A detailed description of the expected set up of 
+<tt>argv</tt> and <tt>argc</tt> can be found 
+in the <a href="http://www.student.cs.uwaterloo.ca/~cs350/common/os161-man/syscall/execv.html">man page for the <tt>execv</tt> system call</a>.
+</ul>
+-->
+
+<!-- --------------------------------------------------------- -->
+
+<!--
+<hr>
+<h1> open,  close, read, write </h1>
+<a name="fileops"></a>
+
+<ul>
+<li>
+A call like this:
+<pre>
+result = vfs_open("string", mode, &2vn);
+</pre>
+is incorrect and should bring a warning from the
+compiler.  The problem is that <tt>vfs_open</tt>
+may modify its first argument, but 
+"string" is an unmodifiable literal.
+So if, for example, you want to open the 
+console, you need to do something like this
+instead:
+<pre>
+char *console = NULL;
+console = kstrdup("con:");
+result = vfs_open(console,mode,&vn);
+kfree(console);
+</pre>
+</li>
+
+<li>
+<tt>VOP_WRITE</tt>, <tt>VOP_READ</tt>, and other operations
+on vnodes want a <tt>uio</tt> structure as a parameter.
+<tt>kern/syscall/loadelf.c</tt> contains some useful
+examples of <tt>uio</tt> structures being setup and
+used for vnode operations.
+</li>
+
+</ul>
+-->
+
+<!-- --------------------------------------------------------- -->
+<hr>
+
+<h1> fork </h1>
+<a name="fork"></a>
+
+<ul>
+<li>To implement fork, you will need to copy the
+address space and trap frame from the parent process to
+use for the child process.  When you do this, you need to watch
+out for potential <i>synchronization problems</i>.  Specifically,
+you will need to make sure that the new thread goes not go to
+user mode until its address space and trap
+frame have been set up.
+In addition, you need to make sure that the parent process does not
+return to user mode until its address space and trap frame have
+been copied.
+</li>
+</ul>
+
+<!-- --------------------------------------------------------- -->
+<hr>
+
+<h1>Kernel include files</h1>
+<a name="includes"></a>
+
+<ul>
+<li>If you create a new kernel source (<tt>.c</tt>) file, you will
+need to <tt>#include</tt> one or more kernel header files at the
+top.   The kernel has some requirements about what you must include,
+and about the order in which things must be included. 
+In particular, the kernel expects that
+<pre>
+#include &lsaquo;types.h&rsaquo;
+</pre>
+will always come first.   For more details and rules about 
+<tt>#include</tt>, see the comments at the top of
+<tt>kern/include/types.h</tt>.
+
+Symptoms of failure to observe the these rules include 
+complaints about errors in header files during kernel compilation.
+</li>
+
+<li>
+OS/161 kernel header files follow a convention designed to ensure that
+headers will not get included twice during any compilation.
+For example, the <tt>kern/include/lib.h</tt> includes the following
+preprocessor code at the top of the file
+<pre>
+#ifndef _LIB_H_
+#define _LIB_H_ 
+</pre>
+as well as a corresponding
+<pre>
+#endif /* _LIB_H_ */
+</pre>
+at the end of the file.
+This ensures that <tt>lib.h</tt> will never be included more than
+once during a compilation.   Every other kernel include file 
+includes similar code, for the same reason.   If you add a new
+header file to your kernel, you should follow a similar convention
+to ensure that your header will never be included twice.   Failure
+to do so can lead to compilation errors, such as complaints about
+multiply-defined symbols or variables.
+</li>
+
+
+</ul>
+<!-- --------------------------------------------------------- -->
+<hr>
+<h1> proper use of kmalloc and kfree </h1>
+<a name="kmalloc"></a>
+
+<ul>
+<li>
+You will need to use kmalloc to dynamically allocate memory for your kernel to use.
+When that memory is no longer needed, you need to make it available for later reuse
+by calling kfree. For example:
+
+<pre>
+kvaddr = kmalloc(size);  /* allocated some memory */
+
+/* do some stuff */
+
+kfree(kvaddr);           /* finished with the memory so free it */
+</pre>
+
+<li>
+Currently (for Assignment 2)
+kfree and the calls it relies on to actually free memory
+don't do anything, so memory will not actually be reused (yet).
+Assignment 3 often requires completeing the kfree implementation
+so that memory is actually freed and is available for reuse.
+This permits multiple programs (or kernel tests) to be executed over and over again
+without having to reboot the OS.
+
+<li>
+So when working on Assignment 2, be sure to use kfree to free memory when it is not longer needed,
+otherwise you may have to find these memory leaks when implementing
+Assignment 3.
+
+
+</ul>
+<!-- --------------------------------------------------------- -->
+<hr>
+<h1>testing</h1>
+<a name="testing"></a>
+
+<ul>
+<li>
+There are many OS/161 applications that you can use
+to test your kernel.
+The source code for many of these applications can be
+found under <tt>os161-1.99/user</tt>, in the <tt>testbin</tt>,
+<tt>uw-testbin</tt>, <tt>bin</tt> and <tt>sbin</tt> directories.
+<p>
+You build all of the OS/161 application programs when
+you run <tt>bmake</tt> in the directory
+<tt>cs350-os161/os161-1.99</tt>.  When you do this,
+the application program executable files are copied
+into subdirectories under <tt>cs350-os161/root/</tt>.
+<p>
+Once your OS/161 kernel has booted, you can launch an
+application program using the <tt>p</tt> command from
+the kernel menu.  For example, to run the <tt>palin</tt>
+program, which is located in <tt>testbin</tt>, use the 
+following command
+
+<pre>
+OS/161 kernel [? for menu]: p testbin/palin
+</pre>
+
+As usual, you can pass commands to the kernel on sys161
+command line, e.g., 
+
+<pre>
+sys161 kernel "p testbin/palin"
+</pre>
+</li>
+
+<br>
+<li>
+The amount of memory in the default system is not
+very large. For some of the test applications, you may wish to increase 
+the amount of memory by modifying the appropriate
+line in the <tt>sys161.conf</tt> file.
+Note that this must be a multiple of the page size (4096).
+For example:
+
+<pre>
+# Old/default value
+# 31      busctl  ramsize=524288
+# Changed to 4 MB.
+31      busctl  ramsize=4194304
+</pre>
+
+In particular, you will probably have to do this for applications
+like <tt>forktest</tt>, <tt>farm</tt> and <tt>sty</tt>.
+</li>
+
+<li>
+To evaluate the kernel you submit for Assignment 2a, we expect to
+use at least the following test programs, with single-processor
+and multi-processor configurations:
+<dl>
+<dt><tt>uw-testbin/onefork</tt></dt>
+<dd>this is the simplest test
+  of <tt>fork</tt>, and also checks the PIDs returned to the parent
+  and child processes</dd>
+<dt><tt>uw-testbin/pidcheck</tt></dt>
+<dd>this is also a very simple test that
+  relies on <tt>fork</tt> and <tt>getpid</tt>.   It can confirm that
+  the child PID that the parent sees is the same as the child PID that
+  the child sees.</dd>
+<dt><tt>uw-testbin/widefork</tt></dt>
+<dd> multiple forks, and can also test
+  whether exit status values are being passed properly
+  through <tt>_exit</tt> to <tt>waitpid</tt></dd>
+<dt><tt>testbin/forktest</tt></dt>
+<dd>this also performs multiple forks.  It
+ relies on proper <tt>waitpid</tt> synchronization, but not on the
+exit statuses being returned by <tt>waitpid</tt></dd>
+</dl>
+If you'd like more details about what these test programs are doing
+and what kind of output they produce, please just have a look at
+the programs themselves.    The programs are all short, and 
+reviewing them is a good way to ensure that
+you understand how the system calls work.
+</li>
+</ul>

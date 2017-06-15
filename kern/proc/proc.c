@@ -70,6 +70,24 @@ struct semaphore *no_proc_sem;
 #endif  // UW
 
 
+//a2
+pid_t curPid = 1;
+
+pid_t genPid(void){
+	if (array_num(reusePid) == 0){
+		curPid++;
+		return curPid;
+	}
+	else{
+		pid_t* p = array_get(reusePid, 0);
+		//prob1 delete reusepid
+		array_remove(reusePid,0);
+		return *p;
+	}
+}
+
+
+
 
 /*
  * Create a proc structure.
@@ -102,6 +120,42 @@ proc_create(const char *name)
 #ifdef UW
 	proc->console = NULL;
 #endif // UW
+
+//a2
+	//assign pid
+	lock_acquire(pidLock);
+	proc->pid = genPid();
+	lock_release(pidLock);
+
+	//exitcode and state
+	proc->state = 1;
+	proc->exitcode = 0;
+
+	//create children
+	//parent link in syscall.c
+	proc->children = array_create();
+	array_init(proc->children);
+	proc->parent = NULL;
+
+	//create lock and cv
+	proc->waitPidLock = lock_create("waitPidLock");
+	if(proc->waitPidLock == NULL){
+		panic("fail to create waitPidLock");
+	}
+	proc->waitPidCV = lock_create("waitPidCV");
+	if(proc->waitPidCV == NULL){
+		panic("fail to create waitPidCV");
+	}
+
+
+	// add it into runningProcs
+	lock_acquire(allProcLock);
+	array_add(runningProcs,proc->pid, NULL);
+	lock_release(allProcLock);
+
+
+
+
 
 	return proc;
 }
@@ -167,6 +221,53 @@ proc_destroy(struct proc *proc)
 	spinlock_cleanup(&proc->p_lock);
 
 	kfree(proc->p_name);
+
+	//a2
+	//detach proc and its children
+	spinlock_acquire(&proc->p_lock)
+	for (unsigned i=0; i<array_num(&proc->children); i++){
+			struct proc *cd = array_get(&proc->children, i);
+			KASSERT(cd != NULL);
+			cd->parent = NULL;
+		}
+	spinlock_release(&proc->p_lock);
+	array_cleanup(&proc->children);
+
+	//detach proc and its parent
+	struct proc *p = proc->parent;
+	if(parent != NULL){
+
+		spinlock_acquire(&p->p_lock);
+		for (unsigned i = 0; i<array_num(&p->children); i++){
+			struct proc *cd = array_get(&p->children, i);
+			if(cd != NULL && cd->pid == proc->pid){
+				array_remove(&parent->children, i);
+				break;
+			}
+		}
+	}
+
+
+	//clean defined struct
+	lock_destroy(proc->waitPidLock);
+	cv_destroy(proc->waitPidCV);
+
+	//delete it from running proc
+	lock_acquire(allProcLock);
+	for (unsigned i = 0; i<array_num(runningProcs);i++){
+		if (array_get(runningProcs,i) == proc->pid){
+			array_remove(runningProcs,i);
+			break;
+		}
+	}
+	//reuse the pid
+	array_add(reusePid,proc->pid,NULL);
+
+	lock_release(allProcLock);
+	
+
+
+
 	kfree(proc);
 
 #ifdef UW
@@ -208,6 +309,27 @@ proc_bootstrap(void)
     panic("could not create no_proc_sem semaphore\n");
   }
 #endif // UW 
+
+
+  //a2
+  //create global running array reuse array
+  //pidLock and allProcLock
+  runningProcs = array_create();
+  array_init(runningProcs);
+
+  reusePid = array_create();
+  array_init(reusePid);
+
+  pidLock = lock_create("pidLock");
+  if(pidLock == NULL){
+  	panic("fail to create pidLock");
+  }
+
+  allProcLock = lock_create("allProcLock");
+  if(allProcLock == NULL){
+  	panic("fail to create allProcLock");
+  }
+
 }
 
 /*

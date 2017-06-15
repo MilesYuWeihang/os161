@@ -180,4 +180,16 @@ void
 enter_forked_process(struct trapframe *tf)
 {
 	(void)tf;
+	struct trapframe *ftf = tf;
+	struct trapframe ktf = *ftf;
+
+	ktf.tf_v0 = 0;
+	ktf.tf_a3 = 0;
+	ktf.tf_epc +=4;
+	
+
+	KASSERT(curthread->t_iplhigh_count == 0);
+	KASSERT(curthread->t_curspl == 0);
+	kfree(ftf);	
+	mips_usermode(&ktf);
 }

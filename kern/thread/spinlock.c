@@ -138,5 +138,6 @@ spinlock_do_i_hold(struct spinlock *lk)
 
 	/* Assume we can read lk_holder atomically enough for this to work */
 	return (lk->lk_holder == curcpu->c_self);
+}
 
 

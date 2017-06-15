@@ -30,18 +30,10 @@
   Direction destination;
 } Car;
 //static struct cv *intersectionCV;
-static struct cv *NS;
-static struct cv *NW;
-static struct cv *NE;
-static struct cv *SN;
-static struct cv *SW;
-static struct cv *SE;
+static struct cv *NO;
+static struct cv *SO;
 static struct cv *WE;
-static struct cv *WS;
-static struct cv *WN;
-static struct cv *EW;
-static struct cv *EN;
-static struct cv *ES;
+static struct cv *EA;
 static struct lock *trafficLock;
 static struct array* mutexList;
 static struct Car* temp;
@@ -52,7 +44,7 @@ bool isRightTurn(Car *);
 bool canGoTogether(Car *, Car *);
 bool tryEnter(Car *);
 bool leaveMutex(Direction, Direction);
-struct cv *chooseCV(Direction, Direction);
+struct cv *chooseCV(Direction);
 //determine if this car is turning rigt
 bool isRightTurn(Car *c){
   if((c->origin == north)&&(c->destination == west)){
@@ -98,7 +90,7 @@ bool tryEnter(Car *c){
     //kprintf("origin:%d, destination:%d \n", temp->origin,temp->destination);
     if(!canGoTogether(c, temp)){
       //kprintf("this car wait\n");
-      cv_wait(chooseCV(temp->origin, temp->destination), trafficLock);
+      cv_wait(chooseCV(temp->origin), trafficLock);
       return false;
     }
   }
@@ -121,39 +113,14 @@ bool leaveMutex(Direction origin, Direction destination){
   return false;
 }
 
-struct cv *chooseCV(Direction d, Direction e){
+struct cv *chooseCV(Direction d){
   switch (d){
-    
-    case north:   switch(e){
-        case south: return NS;
-        case west: return NW;
-        case east: return NE;
-        default: return NS;
-      };
-    
-    case south:
-      switch(e){
-        case north: return SN;
-        case west: return SW;
-        case east: return SE;
-        default: return NS;
-      };
-    case west: 
-      switch(e){
-        case south: return WS;
-        case north: return WN;
-        case east: return WE;
-        default: return NS;
-      };
-    case east: 
-      switch(e){
-        case south: return ES;
-        case west: return EW;
-        case north: return EN;
-        default: return NS;
-      };
+    case north: return NO;
+    case south: return SO;
+    case west: return WE;
+    case east: return EA;
   }
-  return NS;
+  return NO;
 }
 
 /* 
@@ -177,18 +144,11 @@ intersection_sync_init(void)
   if (trafficLock == NULL) {
     panic("could not create lock");
   }
-  NS = cv_create("NS");
-  NW = cv_create("NW");
-  NE = cv_create("NE");
-  EN = cv_create("EN");
-  ES = cv_create("ES");
-  EW = cv_create("EW");
-  SW = cv_create("SW");
-  SN = cv_create("SN");
-  SE = cv_create("SE");
-  WN = cv_create("WN");
+
+  NO = cv_create("NS");
+  SO = cv_create("SO");
   WE = cv_create("WE");
-  WS = cv_create("WS");
+  EA = cv_create("EA");
   
   mutexList = array_create();
   array_init(mutexList);
@@ -211,18 +171,10 @@ intersection_sync_cleanup(void)
   /* replace this default implementation with your own implementation */
   //KASSERT(intersectionCV != NULL);
   //cv_destroy(intersectionCV);
-  cv_destroy(NS);
-  cv_destroy(NW);
-  cv_destroy(NE);
-  cv_destroy(EN);
-  cv_destroy(ES);
-  cv_destroy(EW);
-  cv_destroy(SN);
-  cv_destroy(SW);
-  cv_destroy(SE);
-  cv_destroy(WN);
+  cv_destroy(NO);
+  cv_destroy(SO);
   cv_destroy(WE);
-  cv_destroy(ES);
+  cv_destroy(EA);
   KASSERT(trafficLock != NULL);
   lock_destroy(trafficLock);
   array_destroy(mutexList);
@@ -280,7 +232,7 @@ intersection_after_exit(Direction origin, Direction destination)
    //kprintf("\n");
    // kprintf("%d, %d \n", origin, destination);
   if(leaveMutex(origin,destination)){
-      cv_broadcast(chooseCV(origin,destination),trafficLock);
+      cv_broadcast(chooseCV(origin),trafficLock);
    // kprintf("leave safe \n"); 
   }
   else{
